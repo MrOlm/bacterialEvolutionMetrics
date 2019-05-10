@@ -9,8 +9,11 @@
 # CHANGED IN VERSION 0.1.3:
 # Fixed a too many alignments bug with a workaround https://biotite.berkeley.edu/j/user/mattolm/notebooks/OtherProjects/RefSeq/goANI_2_development_4_debugging.ipynb
 
+# CHANGED IN VERSION 0.2.0:
+# updated to match https://biotite.berkeley.edu/j/user/mattolm/notebooks/OtherProjects/RefSeq/_SupplementalNotebooks_1_dnds_HGT_calculations.ipynb
+
 __author__ = "Matt Olm"
-__version__ = "0.1.3"
+__version__ = "0.2.0"
 __license__ = "MIT"
 
 import os
@@ -121,7 +124,100 @@ def parse_to_genomeLevel(Ddb):
     Tdbs = []
     for query, qdb in Ddb.groupby('querry'):
         for ref, db in qdb.groupby('reference'):
-            tdb = summarize_dnds(db)
+            tdb = summarize_dnds_HGT(db, noFilt=True)
+            Tdbs.append(tdb)
+    return pd.concat(Tdbs)
+
+from tqdm import tqdm
+
+def summarize_dnds_HGT(db, noFilt=False, fastANI=False):
+    table = defaultdict(list)
+
+    # Basic info
+    table['reference'].append(db['reference'].tolist()[0])
+    table['querry'].append(db['querry'].tolist()[0])
+
+    # Number of comparisons
+    table['total_comps'].append(len(db))
+    table['failed_comps'].append(len(db[db['N_sites'] == 0]))
+    table['successful_comps'].append(len(db[db['N_sites'] > 0]))
+    table['considered_bases'].append(db[(db['N_sites'] > 0)]['al_len'].sum())
+    table['percet_successful'].append((len(db[db['N_sites'] > 0]) / len(db)) * 100)
+
+    # Filter to successful comparisons
+    db = db[db['N_sites'] > 0]
+
+    # dN/dS stuff
+    N = db['N_sites'].sum()
+    table['N_sites'].append(N)
+    dN = db['N_changed'].sum()
+    table['N_changed'].append(dN)
+    S = db['S_sites'].sum()
+    table['S_sites'].append(S)
+    dS = db['S_changed'].sum()
+    table['S_changed'].append(dS)
+    if (N > 0) & (S > 0) & (dS > 0):
+        table['dN/dS'].append(((dN/N) / (dS/S)))
+    else:
+        table['dN/dS'].append(np.nan)
+
+    # Calculate ANI if you must
+    if fastANI == False:
+        fastANI = sum([p * l for p, l in zip(db['p_inden'], db['al_len'])]) \
+                    / db['al_len'].sum()
+    table['fast_ani'].append(fastANI)
+
+    # Filter to only ones with a full alignment
+    if noFilt:
+        hdb = db[(db['al_len'] > 500)]
+    else:
+        hdb = db[(db['al_len'] > 500) & (db['al_len'] < 1000)]
+
+    ex_iden = _calc_expected(hdb, fastANI)
+    table['counted_comps'].append(len(hdb))
+    table['identical_comps'].append(len(hdb[hdb['p_inden'] > 99.99]))
+    table['expected_identicle'].append(ex_iden)
+
+    try:
+        table['percent_enriched'].append(((len(hdb[hdb['p_inden'] > 99.99]) - int(ex_iden)) / len(hdb))*100)
+        hani = sum([p * l for p, l in zip(hdb['p_inden'], hdb['al_len'])]) \
+                / hdb['al_len'].sum()
+        table['filtered_ani'].append(hani)
+        table['filtered_af'].append(db['al_len'].sum() / db['qry_len'].sum())
+    except:
+        table['percent_enriched'].append(0)
+        if not noFilt:
+            table['filtered_ani'].append(0)
+            table['filtered_af'].append(0)
+
+    Ndb = pd.DataFrame(table)
+    return Ndb
+
+def _calc_expected(db, ani):
+    expected = 0
+    prob_diff = (100-ani) / 100
+    prob_same = ani / 100
+    for i, row in db.iterrows():
+        # probability of this row being 0
+        #p = prob_diff * int(row['al_len'])
+        p = prob_same ** int(row['al_len'])
+        if p > 1:
+            expected += 1
+        else:
+            expected += p
+    return expected
+
+def parse_to_genomeLevel_HGT(Ddb, noFilt=False):
+    Tdbs = []
+    for query, qdb in tqdm(Ddb.groupby('querry')):
+        for ref, db in qdb.groupby('reference'):
+            # get the FastANI
+            try:
+                fastANI = _get_ani(FAdb, db['reference'].tolist()[0], db['querry'].tolist()[0])
+            except:
+                fastANI = 0
+
+            tdb = summarize_dnds_HGT(db, noFilt=noFilt, fastANI=fastANI)
             Tdbs.append(tdb)
     return pd.concat(Tdbs)
 
