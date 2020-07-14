@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+# Version 0.2.2 - 7.14.20
+# Tried to add handling of empty files
+
 # Version 0.2.1 - 7.14.20
 # Updated the substitution_matrix that seems to be different now?
 # Added some additional debugging
@@ -17,7 +20,7 @@
 # updated to match https://biotite.berkeley.edu/j/user/mattolm/notebooks/OtherProjects/RefSeq/_SupplementalNotebooks_1_dnds_HGT_calculations.ipynb
 
 __author__ = "Matt Olm"
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 __license__ = "MIT"
 
 import os
@@ -288,26 +291,27 @@ def iterate_commands(wd, Ndb):
 
         # get a list of gense to align
         gedb = parse_goANI(nsimscan_locs[0], nsimscan_locs[1])
-        #print(len(gedb))
+        if len(gedb) > 0:
+            #print(len(gedb))
 
-        # get the fna and faa files
-        Qfna, Qfaa, Rfna, Rfaa = _get_protein_files(wd, row)
+            # get the fna and faa files
+            Qfna, Qfaa, Rfna, Rfaa = _get_protein_files(wd, row)
 
-        # make a command
-        cmd = dnDs_command()
-        cmd.geneDb = gedb
-        cmd.row = row
-        cmd.Qfna = Qfna
-        cmd.Qfaa = Qfaa
-        cmd.Rfna = Rfna
-        cmd.Rfaa = Rfaa
+            # make a command
+            cmd = dnDs_command()
+            cmd.geneDb = gedb
+            cmd.row = row
+            cmd.Qfna = Qfna
+            cmd.Qfaa = Qfaa
+            cmd.Rfna = Rfna
+            cmd.Rfaa = Rfaa
 
-        # verify command
-        cmd.verify()
+            # verify command
+            cmd.verify()
 
-        # append it to the list
-        print('generated command {0} vs {1}'.format(row['querry'], row['reference']))
-        yield cmd
+            # append it to the list
+            print('generated command {0} vs {1}'.format(row['querry'], row['reference']))
+            yield cmd
 
 def _get_nsim_files(wd, row):
     '''
@@ -359,24 +363,25 @@ def _quick_parse_filter(loc):
     db1 = db1.rename(columns={'#qry_id':'qry_id'})
 
     # Filter like gANI
-    db1 = db1.sort_values(['al_len','qry_id', 'sbj_id'], ascending=False)
-    db1['af'] = [a/min(o,t) for a,o,t in zip(db1['al_len'],
-                                             db1['qry_len'],
-                                             db1['sbj_len'])]
-    db1 = db1[(db1['af'] >= 0.7) & (db1['p_inden'] >= 70)]
+    if len(db1) > 0:
+        db1 = db1.sort_values(['al_len','qry_id', 'sbj_id'], ascending=False)
+        db1['af'] = [a/min(o,t) for a,o,t in zip(db1['al_len'],
+                                                 db1['qry_len'],
+                                                 db1['sbj_len'])]
+        db1 = db1[(db1['af'] >= 0.7) & (db1['p_inden'] >= 70)]
 
-    # Only keep reciprical best hits
-    q2b = db1.sort_values('sw_score', ascending=False).drop_duplicates(subset=['qry_id'])\
-            .set_index('qry_id')['sbj_id'].to_dict()
-    s2b = db1.sort_values('sw_score', ascending=False).drop_duplicates(subset=['sbj_id'])\
-            .set_index('sbj_id')['qry_id'].to_dict()
+        # Only keep reciprical best hits
+        q2b = db1.sort_values('sw_score', ascending=False).drop_duplicates(subset=['qry_id'])\
+                .set_index('qry_id')['sbj_id'].to_dict()
+        s2b = db1.sort_values('sw_score', ascending=False).drop_duplicates(subset=['sbj_id'])\
+                .set_index('sbj_id')['qry_id'].to_dict()
 
-    db1['best_sbj'] = db1['qry_id'].map(q2b)
-    db1['best_qry'] = db1['sbj_id'].map(s2b)
+        db1['best_sbj'] = db1['qry_id'].map(q2b)
+        db1['best_qry'] = db1['sbj_id'].map(s2b)
 
-    db1 = db1[(db1['sbj_id'] == db1['best_sbj']) & (db1['qry_id'] == db1['best_qry'])]
-    del db1['best_sbj']
-    del db1['best_qry']
+        db1 = db1[(db1['sbj_id'] == db1['best_sbj']) & (db1['qry_id'] == db1['best_qry'])]
+        del db1['best_sbj']
+        del db1['best_qry']
 
     # Return your list
     return db1
