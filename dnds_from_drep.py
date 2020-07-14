@@ -2,6 +2,7 @@
 
 # Version 0.2.2 - 7.14.20
 # Tried to add handling of empty files
+# Fixed stupid nsmiscan version
 
 # Version 0.2.1 - 7.14.20
 # Updated the substitution_matrix that seems to be different now?
@@ -360,7 +361,7 @@ def parse_goANI(loc1, loc2):
 
 def _quick_parse_filter(loc):
     db1 = pd.read_csv(loc, sep='\t')
-    db1 = db1.rename(columns={'#qry_id':'qry_id'})
+    db1 = db1.rename(columns={'#qry_id':'qry_id', '#Q_id':'qry_id', 'S_id':'sbj_id', 'trg_len':'sbj_len'})
 
     # Filter like gANI
     if len(db1) > 0:
