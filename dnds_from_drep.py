@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+# Version 0.2.1 - 7.14.20
+# Updated the substitution_matrix that seems to be different now?
+# Added some additional debugging
+
 # Version 0.1.3
 # Matt Olm
 # mattolm@berkeley.edu
@@ -13,7 +17,7 @@
 # updated to match https://biotite.berkeley.edu/j/user/mattolm/notebooks/OtherProjects/RefSeq/_SupplementalNotebooks_1_dnds_HGT_calculations.ipynb
 
 __author__ = "Matt Olm"
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __license__ = "MIT"
 
 import os
@@ -25,6 +29,7 @@ import shutil
 import argparse
 import textwrap
 import datetime
+import traceback
 import numpy as np
 import pandas as pd
 
@@ -46,6 +51,8 @@ from Bio.SubsMat import MatrixInfo
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import MultipleSeqAlignment
 from Bio.codonalign.codonalphabet import default_codon_table
+
+from Bio.Align import substitution_matrices
 
 def main(args):
     '''
@@ -106,8 +113,10 @@ def dnds_from_dRep(wd, p=6, debug=False):
             print('finished chunk {0}'.format(j))
             Rdb = Rdb.append(RNdb)
             RNdb.to_csv(of + 'detailed_dNdS_info_chunk_{0}.csv'.format(j), index=False)
-        except:
+        except Exception as e:
             print('Chunk {0} failed!!'.format(j))
+            traceback.print_exc()
+
         j += 1
 
     # Save output
@@ -393,6 +402,7 @@ def goANI_wrapper(cmd):
         return cmd, goANI_dnds_calculation(cmd.Qfna, cmd.Qfaa, cmd.Rfna, cmd.Rfaa, cmd.geneDb)
     except Exception as e:
         print("whole file exception- {0}".format(str(e)))
+        traceback.print_exc()
         return cmd, pd.DataFrame({'Failed':[True]})
 
 def goANI_dnds_calculation(fna1, faa1, fna2, faa2, gedb, debug=False):
@@ -419,7 +429,8 @@ def goANI_dnds_calculation(fna1, faa1, fna2, faa2, gedb, debug=False):
     # set up aligner
     aligner = Align.PairwiseAligner()
     aligner.mode = 'global'
-    aligner.substitution_matrix = MatrixInfo.blosum62
+    #print(MatrixInfo.blosum62)
+    aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
     aligner.open_gap_score = -12
     aligner.extend_gap_score = -3
 
@@ -760,15 +771,15 @@ class test_dnds_from_drep():
     Tests
     '''
     def setUp(self):
-        self.test_dir = '/home/mattolm/Bio_scripts/test_suite/test_backend/testdir/'
+        self.test_dir = '/Users/mattolm/BioScripts/test_suite/test_backend/testdir/'
 
         if os.path.isdir(self.test_dir):
             shutil.rmtree(self.test_dir)
         os.mkdir(self.test_dir)
 
-        shutil.copytree('/home/mattolm/Bio_scripts/test_suite/test_files/goANI_test/',
-                    '/home/mattolm/Bio_scripts/test_suite/test_backend/testdir/goANI_test')
-        self.wd = '/home/mattolm/Bio_scripts/test_suite/test_backend/testdir/goANI_test/'
+        shutil.copytree('/Users/mattolm/BioScripts/test_suite/test_files/goANI_test/',
+                    '/Users/mattolm/BioScripts/test_suite/test_backend/testdir/goANI_test')
+        self.wd = '/Users/mattolm/BioScripts/test_suite/test_backend/testdir/goANI_test/'
 
     def tearDown(self):
         if os.path.isdir(self.test_dir):
